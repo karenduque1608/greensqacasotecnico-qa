@@ -1,0 +1,5 @@
+com/latam/automation/stepdefinitions/SearchFlightStepDefinitions.class
+com/latam/automation/hooks/SerenityHooks.class
+com/latam/automation/runners/RunCucumberTest.class
+com/latam/automation/userinterface/HomePage.class
+com/latam/automation/tasks/SearchFlight.class

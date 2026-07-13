@@ -1,0 +1,4 @@
+com/latam/automation/models/Passenger.class
+com/latam/automation/utils/CsvReader.class
+com/latam/automation/models/FlightSearchData.class
+com/latam/automation/models/Flight.class
