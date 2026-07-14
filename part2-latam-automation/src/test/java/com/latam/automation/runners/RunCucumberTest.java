@@ -25,7 +25,7 @@ import io.cucumber.junit.platform.engine.Cucumber;
 )
 @ConfigurationParameter(
         key = PLUGIN_PROPERTY_NAME,
-        value = "pretty"
+        value = "pretty,io.cucumber.core.plugin.SerenityReporter"
 )
 public class RunCucumberTest {
 

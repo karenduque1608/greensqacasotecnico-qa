@@ -13,6 +13,11 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 /**
  * Servicio encargado de generar usuarios
@@ -40,13 +45,85 @@ public class UserService {
     }
 
     /**
-     * Genera la cantidad de usuarios solicitada.
+     * Genera la cantidad de usuarios solicitada de forma secuencial.
      */
     public List<User> generateUsers(int quantity) {
 
         List<User> users = new ArrayList<>();
 
-        while (users.size() < quantity) {
+        for (int i = 0; i < quantity; i++) {
+
+            User user = generateSingleValidUser();
+
+            repository.save(user);
+
+            users.add(user);
+
+        }
+
+        return users;
+
+    }
+
+    /**
+     * Genera la cantidad de usuarios solicitada repartiendo el trabajo
+     * entre varios hilos. El guardado en el repositorio se hace de forma
+     * secuencial para evitar escrituras concurrentes sobre SQLite.
+     */
+    public List<User> generateUsersParallel(int quantity, int threadPoolSize) {
+
+        ExecutorService executor = Executors.newFixedThreadPool(threadPoolSize);
+
+        try {
+
+            List<Callable<User>> tasks = new ArrayList<>();
+
+            for (int i = 0; i < quantity; i++) {
+                tasks.add(this::generateSingleValidUser);
+            }
+
+            List<Future<User>> futures = executor.invokeAll(tasks);
+
+            List<User> users = new ArrayList<>();
+
+            for (Future<User> future : futures) {
+
+                User user = future.get();
+
+                repository.save(user);
+
+                users.add(user);
+
+            }
+
+            return users;
+
+        } catch (InterruptedException e) {
+
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Generación paralela interrumpida.", e);
+
+        } catch (ExecutionException e) {
+
+            throw new RuntimeException("Error generando usuarios en paralelo.", e.getCause());
+
+        } finally {
+
+            executor.shutdown();
+
+        }
+
+    }
+
+    /**
+     * Genera un único usuario válido y único.
+     * La generación de datos ficticios ocurre fuera de la sección
+     * sincronizada para permitir que varios hilos trabajen en paralelo;
+     * solo el registro de nombre/documento (estado compartido) se protege.
+     */
+    private User generateSingleValidUser() {
+
+        while (true) {
 
             boolean isCompany = fakerUtil.isCompany();
 
@@ -58,48 +135,19 @@ public class UserService {
 
             int age = fakerUtil.generateAge();
 
-            String city = fakerUtil.generateCity();
-
-            String country = fakerUtil.generateCountry();
-
-            String language =
-                    fakerUtil.generateLanguage(country);
-
-            DocumentStrategy strategy;
-
-            if (isCompany) {
-
-                strategy = new CompanyDocumentStrategy();
-
-            } else if (age < 18) {
-
-                strategy = new MinorDocumentStrategy();
-
-            } else {
-
-                strategy = new AdultDocumentStrategy();
-
-            }
-
-            String document = strategy.generateDocument();
-
-            String fullName = name + " " + lastName;
-
             if (!validationService.isValidAge(age)) {
                 continue;
             }
 
-            if (!validationService.isUniqueName(
-                    fullName,
-                    generatedNames)) {
-                continue;
-            }
+            String city = fakerUtil.generateCity();
 
-            if (!validationService.isDocumentUnique(
-                    document,
-                    generatedDocuments)) {
-                continue;
-            }
+            String country = fakerUtil.generateCountry();
+
+            String language = fakerUtil.generateLanguage(country);
+
+            DocumentStrategy strategy = resolveStrategy(isCompany, age);
+
+            String document = strategy.generateDocument();
 
             User user = factory.createUser(
                     isCompany,
@@ -116,16 +164,40 @@ public class UserService {
                 continue;
             }
 
-            generatedNames.add(fullName);
-            generatedDocuments.add(document);
+            String fullName = name + " " + lastName;
 
-            repository.save(user);
+            synchronized (this) {
 
-            users.add(user);
+                if (!validationService.isUniqueName(fullName, generatedNames)) {
+                    continue;
+                }
+
+                if (!validationService.isDocumentUnique(document, generatedDocuments)) {
+                    continue;
+                }
+
+                generatedNames.add(fullName);
+                generatedDocuments.add(document);
+
+                return user;
+
+            }
 
         }
 
-        return users;
+    }
+
+    private DocumentStrategy resolveStrategy(boolean isCompany, int age) {
+
+        if (isCompany) {
+            return new CompanyDocumentStrategy();
+        }
+
+        if (age < 18) {
+            return new MinorDocumentStrategy();
+        }
+
+        return new AdultDocumentStrategy();
 
     }
 

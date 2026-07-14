@@ -39,7 +39,11 @@ OpenCSV facilita la generación del archivo CSV solicitado por el ejercicio, pro
 
 ## JUnit 5
 
-JUnit 5 se utiliza para validar mediante pruebas unitarias las principales reglas de negocio implementadas en el generador de datos.
+JUnit 5 se utiliza para validar mediante pruebas unitarias las principales reglas de negocio implementadas en el generador de datos (`src/test/java`): edad, unicidad de nombre/documento, reglas de idioma, formato de documento por tipo de usuario y la generación completa (secuencial y en paralelo) contra un repositorio en memoria.
+
+## JavaMail (com.sun.mail:javax.mail)
+
+Se utiliza para el envío por correo (bonus) del archivo CSV generado.
 
 ---
 
@@ -104,11 +108,34 @@ El desarrollo incluye ejemplos de los cuatro pilares fundamentales:
 La aplicación permite:
 
 * Generar la cantidad de registros indicada por el usuario.
+* Generar los registros de forma secuencial o en paralelo (bonus), a elección del usuario.
 * Garantizar que no existan documentos duplicados.
 * Garantizar que la combinación nombre + apellido sea única.
 * Validar todas las reglas de negocio definidas en el ejercicio.
-* Almacenar la información en SQLite.
+* Almacenar la información en SQLite, incluyendo la posibilidad de borrar los registros de ejecuciones pasadas antes de generar nuevos.
 * Exportar los registros a un archivo CSV.
+* Enviar el archivo CSV generado por correo electrónico (bonus).
+
+---
+
+# Bonus implementados
+
+## Ejecución en paralelo
+
+Al ejecutar la aplicación se pregunta si la generación debe hacerse en paralelo. En ese caso, `UserService.generateUsersParallel` reparte la generación de usuarios entre varios hilos (`ExecutorService`), sincronizando únicamente la sección crítica de validación de unicidad (nombre y documento); el guardado en la base de datos se hace de forma secuencial para evitar escrituras concurrentes sobre SQLite.
+
+## Envío por correo
+
+Al finalizar la generación se pregunta si se desea enviar el archivo CSV por correo. El envío usa `javax.mail` y las credenciales SMTP se configuran mediante variables de entorno (nunca en el código):
+
+```bash
+export SMTP_HOST=smtp.example.com
+export SMTP_PORT=587
+export SMTP_USER=usuario@example.com
+export SMTP_PASSWORD=clave-de-aplicacion
+```
+
+Si estas variables no están configuradas, la aplicación informa que el envío se omite en lugar de fallar.
 
 ---
 
